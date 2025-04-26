@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Uploaded Files</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/11.6.0/firebase-firestore-compat.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #f5f7fa;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+
+    h2 {
+      text-align: center;
+      color: #2c3e50;
+      margin-bottom: 30px;
+    }
+
+    #fileList {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    div > div {
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      padding: 15px 20px;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: transform 0.2s ease;
+      position: relative;
+    }
+
+    div > div:hover {
+      transform: translateY(-2px);
+    }
+
+    span {
+      flex: 1;
+      font-size: 18px;
+      color: #2980b9;
+      font-weight: 500;
+      transition: color 0.2s;
+      cursor: pointer;
+    }
+
+    span:hover {
+      color: #1abc9c;
+      text-decoration: underline;
+    }
+
+    a {
+      display: block;
+      text-align: center;
+      margin-top: 30px;
+      text-decoration: none;
+      color: #34495e;
+      font-weight: bold;
+    }
+
+    a:hover {
+      color: #1abc9c;
+    }
+
+    .dropdown {
+      background-color: #3498db;
+      position: relative;
+      display: inline-block;
+      border-radius: 6px;
+    }
+
+    .dropdown button {
+      background-color: #3498db;
+      color: white;
+      padding: 8px 10px;
+      font-size: 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .dropdown-content {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 140%; /* Show to the right */
+      background-color: #ffffff;
+      min-width: 120px;
+      box-shadow: 0px 4px 8px rgba(0,0,0,0.1);
+      z-index: 1;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .dropdown-content button {
+      width: 100%;
+      padding: 10px;
+      text-align: left;
+      background: none;
+      border: none;
+      color: #333;
+      font-size: 14px;
+    }
+
+    .dropdown-content button:hover {
+      background-color: #3498db;
+      color: white;
+    }
+
+    .dropdown:hover .dropdown-content {
+      display: block;
+    }
+
+    .dropdown:hover {
+      background-color: #3498db;
+    }
+  </style>
+</head>
+<body>
+  <h2>Stored Files</h2>
+  <div id="fileList"></div>
+  
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAq-Yxaccz-Ia6o9NSTC4Fm-PM02DbvIt0",
+      authDomain: "otp-verification-cb472.firebaseapp.com",
+      databaseURL: "https://otp-verification-cb472-default-rtdb.firebaseio.com",
+      projectId: "otp-verification-cb472",
+      storageBucket: "otp-verification-cb472.appspot.com",
+      messagingSenderId: "939280162949",
+      appId: "1:939280162949:web:89b969538a7f7f0e54c9ec"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    const container = document.getElementById("fileList");
+
+    db.collection("uploads").orderBy("uploadedAt", "desc").get().then(snapshot => {
+      snapshot.forEach(doc => {
+        const file = doc.data();
+        const name = file.name;
+        const data = file.data;
+
+        const row = document.createElement("div");
+
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = name;
+        nameSpan.onclick = () => preview(data);
+
+        const dropdown = document.createElement("div");
+        dropdown.className = "dropdown";
+
+        const menuBtn = document.createElement("button");
+        menuBtn.textContent = "⋮";
+
+        const dropdownContent = document.createElement("div");
+        dropdownContent.className = "dropdown-content";
+
+        const downloadBtn = document.createElement("button");
+        downloadBtn.textContent = "Download";
+        downloadBtn.onclick = () => downloadAsPDF(name, data);
+
+        const changeBtn = document.createElement("button");
+        changeBtn.textContent = "Change";
+        changeBtn.onclick = () => replaceFile(doc.id, name);
+
+        const editBtn = document.createElement("button");
+        editBtn.textContent = "Edit";
+        editBtn.onclick = async () => {
+          const newName = prompt("Enter new file name:", name);
+          if (newName && newName !== name) {
+            await db.collection("uploads").doc(doc.id).update({
+              name: newName,
+              uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("File name updated.");
+            location.reload();
+          }
+        };
+
+        dropdownContent.appendChild(downloadBtn);
+        dropdownContent.appendChild(changeBtn);
+        dropdownContent.appendChild(editBtn);
+        dropdown.appendChild(menuBtn);
+        dropdown.appendChild(dropdownContent);
+
+        row.appendChild(nameSpan);
+        row.appendChild(dropdown);
+        container.appendChild(row);
+      });
+    });
+
+    function preview(dataUrl) {
+      const win = window.open();
+      win.document.write(`<img src="${dataUrl}" style="max-width:100%">`);
+    }
+
+    async function downloadAsPDF(name, dataUrl) {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF();
+      const img = new Image();
+      img.src = dataUrl;
+      img.onload = () => {
+        const width = pdf.internal.pageSize.getWidth();
+        const height = (img.height / img.width) * width;
+        pdf.addImage(img, "PNG", 0, 0, width, height);
+        pdf.save(name.replace(/\.[^/.]+$/, "") + ".pdf");
+      };
+    }
+
+    function replaceFile(docId, oldName) {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = ".pdf,image/jpeg,image/png";
+
+      input.onchange = () => {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+
+        if (file.type === "application/pdf") {
+          reader.onload = async function (e) {
+            const pdfData = new Uint8Array(e.target.result);
+            const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            const page = await pdf.getPage(1);
+            const viewport = page.getViewport({ scale: 2 });
+
+            const canvas = document.createElement("canvas");
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            const ctx = canvas.getContext("2d");
+            await page.render({ canvasContext: ctx, viewport }).promise;
+
+            const imageData = canvas.toDataURL("image/png");
+            await db.collection("uploads").doc(docId).update({
+              data: imageData,
+              type: "pdf-preview",
+              uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("PDF replaced.");
+            location.reload();
+          };
+          reader.readAsArrayBuffer(file);
+        } else if (file.type.startsWith("image/")) {
+          reader.onload = async function (e) {
+            await db.collection("uploads").doc(docId).update({
+              data: e.target.result,
+              type: "image",
+              uploadedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+            alert("Image replaced.");
+            location.reload();
+          };
+          reader.readAsDataURL(file);
+        } else {
+          alert("Only PDF or image formats allowed.");
+        }
+      };
+      input.click();
+    }
+  </script>
+</body>
+</html>
